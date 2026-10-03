@@ -1,0 +1,14 @@
+model_path: "../../a1_mjcf/mjcf/empty.xml"
+command_topic: "/a1/command"
+state_topic: "/a1/state"
+depth_topic: "/a1/depth"
+reset_service: "/a1/reset"
+sim_frequency: 500.0
+state_publish_frequency: 100.0
+depth_publish_frequency: 20.0
+depth_width: 106
+depth_height: 60
+publish_depth: true
+reset_keyframe: "home"
+command_timeout: 0.25
+depth_camera: "depth_camera"

@@ -1,0 +1,66 @@
+# ===========================================================================
+# A1 deploy workspace
+# ===========================================================================
+
+# ROS 2 / colcon build artifacts --------------------------------------------
+/build/
+/install/
+/log/
+devel/
+cmake_build/
+.catkin_tools/
+
+# Python (uv) environment and caches ----------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Downloaded third-party runtimes -------------------------------------------
+# Everything currently under thirdparty/ is either downloaded or a vendored
+# checkout, so the whole directory is ignored. If you ever add first-party
+# sources there, narrow these rules instead of relying on the collapse.
+# Produced by scripts/download_mujoco.sh and
+# scripts/download_inference_runtime.sh (invoked by ./frog_build.sh).
+# Never commit these: they are hundreds of megabytes of platform binaries.
+/thirdparty/interface_runtime/
+/thirdparty/mujoco/
+/thirdparty/.mujoco_download_tmp/
+/library/
+
+# Vendored Unitree SDK ------------------------------------------------------
+# Third-party checkout that also carries a stale .git file copied from another
+# project. Drop this rule if you want to commit it as plain files, or better,
+# register it as a proper git submodule.
+/thirdparty/unitree_legged_sdk/
+
+# Keep the colcon discovery marker tracked even though thirdparty/ content is
+# ignored: without it colcon treats the vendored SDK as a cmake package.
+!/thirdparty/COLCON_IGNORE
+
+# MuJoCo runtime output -----------------------------------------------------
+MUJOCO_LOG.TXT
+
+# Downloaded archives and temporary files -----------------------------------
+*.dmg
+*.tar.gz
+*.zip
+*.tgz
+*.part
+
+# Logs and crash dumps ------------------------------------------------------
+*.log
+core
+core.*
+
+# Editors and OS ------------------------------------------------------------
+*.swp
+*.swo
+*~
+.DS_Store
+# Uncomment to keep local VS Code settings out of the repository.
+# .vscode/

@@ -1,0 +1,14 @@
+[project]
+name = "a1-mujoco-sim"
+version = "0.1.0"
+description = "Unitree A1 MuJoCo simulation environment with ROS 2 interfaces"
+requires-python = "==3.10.*"
+dependencies = [
+    "mujoco>=3.11,<4",
+    "numpy>=2,<3",
+    "pillow>=9.1,<12",
+    "pyyaml>=6,<7",
+]
+
+[tool.uv]
+package = false
