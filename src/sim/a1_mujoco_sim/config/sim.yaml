@@ -1,14 +1,29 @@
+# Configuration for the a1_mujoco_sim node.
+# Only genuinely tunable values are listed. Anything omitted falls back to the
+# defaults declared in a1_mujoco_sim/config.py.
+
+# Model ---------------------------------------------------------------------
+# Relative paths are resolved against this file first, then against the cwd.
 model_path: "../../a1_mjcf/mjcf/empty.xml"
-command_topic: "/a1/command"
-state_topic: "/a1/state"
-depth_topic: "/a1/depth"
-reset_service: "/a1/reset"
+
+# Rates in Hz ---------------------------------------------------------------
 sim_frequency: 500.0
 state_publish_frequency: 100.0
+imu_publish_frequency: 200.0
 depth_publish_frequency: 20.0
+
+# Depth camera --------------------------------------------------------------
 depth_width: 106
 depth_height: 60
-publish_depth: true
-reset_keyframe: "home"
+
+# ROS interfaces ------------------------------------------------------------
+command_topic: /a1/command
+state_topic: /a1/state
+imu_topic: /a1/imu
+depth_topic: /a1/depth
+reset_service: /a1/reset
+
+# Command watchdog ----------------------------------------------------------
+# Zero all joint torques when no command arrives within this many seconds.
+# Use 0 to disable the watchdog.
 command_timeout: 0.25
-depth_camera: "depth_camera"

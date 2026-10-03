@@ -11,8 +11,9 @@ from rclpy.node import Node
 
 from a1_sim_msgs.msg import DepthImage, JointData, RobotCmd, RobotData
 from a1_sim_msgs.srv import Reset
+from sensor_msgs.msg import Imu
 
-from .config import SimConfig
+from .config import DEPTH_CAMERA_NAME, IMU_FRAME_ID, RESET_KEYFRAME, SimConfig
 from .model import RobotModel
 
 
@@ -39,6 +40,13 @@ class A1MujocoSimNode(Node):
         self._state_timer = self.create_timer(
             1.0 / config.state_publish_frequency, self._publish_state)
 
+        self._imu_publisher = None
+        self._imu_timer = None
+        if robot.imu_available:
+            self._imu_publisher = self.create_publisher(Imu, config.imu_topic, 10)
+            self._imu_timer = self.create_timer(
+                1.0 / config.imu_publish_frequency, self._publish_imu)
+
     # -- command watchdog ---------------------------------------------------
     def command_is_stale(self) -> bool:
         """Whether no command arrived recently.
@@ -54,9 +62,7 @@ class A1MujocoSimNode(Node):
     # -- depth sensor -------------------------------------------------------
     def render_and_publish_depth(self) -> np.ndarray | None:
         """Render the depth camera, publish it and return the raw image."""
-        if not self._config.publish_depth:
-            return None
-        camera_id = self._robot.camera_id(self._config.depth_camera)
+        camera_id = self._robot.camera_id(DEPTH_CAMERA_NAME)
         if camera_id < 0:
             return None
         renderer = self._get_renderer()
@@ -101,10 +107,36 @@ class A1MujocoSimNode(Node):
     def _on_reset(self, request, response):
         del request
         with self.lock:
-            self._robot.reset_to_keyframe(self._config.reset_keyframe)
+            self._robot.reset_to_keyframe(RESET_KEYFRAME)
             self._last_command_time = self.get_clock().now()
         response.result = 0
         return response
+
+    def _publish_imu(self) -> None:
+        """Publish the trunk IMU as ``sensor_msgs/Imu``.
+
+        Covariances stay at zero because the MuJoCo sensors are noiseless.
+        """
+        with self.lock:
+            sample = self._robot.read_imu()
+            if sample is None:
+                return
+            message = Imu()
+            message.header.stamp = self.get_clock().now().to_msg()
+            message.header.frame_id = IMU_FRAME_ID
+            message.orientation.w = float(sample.orientation[0])
+            message.orientation.x = float(sample.orientation[1])
+            message.orientation.y = float(sample.orientation[2])
+            message.orientation.z = float(sample.orientation[3])
+            gyroscope = sample.angular_velocity
+            message.angular_velocity.x = float(gyroscope[0])
+            message.angular_velocity.y = float(gyroscope[1])
+            message.angular_velocity.z = float(gyroscope[2])
+            accelerometer = sample.linear_acceleration
+            message.linear_acceleration.x = float(accelerometer[0])
+            message.linear_acceleration.y = float(accelerometer[1])
+            message.linear_acceleration.z = float(accelerometer[2])
+        self._imu_publisher.publish(message)
 
     # -- helpers ------------------------------------------------------------
     def _get_renderer(self):
@@ -125,7 +157,7 @@ class A1MujocoSimNode(Node):
     def _depth_message(self, depth: np.ndarray) -> DepthImage:
         message = DepthImage()
         message.header.stamp = self.get_clock().now().to_msg()
-        message.header.frame_id = self._config.depth_camera
+        message.header.frame_id = DEPTH_CAMERA_NAME
         message.height, message.width = (int(size) for size in depth.shape)
         message.encoding = '32FC1'
         message.is_bigendian = 0

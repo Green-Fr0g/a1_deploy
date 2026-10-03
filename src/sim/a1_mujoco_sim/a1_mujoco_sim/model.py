@@ -1,11 +1,24 @@
 """MuJoCo model wrapper for the Unitree A1."""
 from __future__ import annotations
 
+import dataclasses
 import pathlib
 from collections.abc import Iterable, Sequence
 
 import mujoco
 import numpy as np
+
+# Sensors carrying the trunk-mounted IMU, in the order used by the XML model.
+IMU_SENSORS = ('imu_quat', 'imu_gyro', 'imu_acc')
+
+
+@dataclasses.dataclass(frozen=True)
+class ImuSample:
+    """One IMU reading taken from the trunk-mounted sensor site."""
+
+    orientation: np.ndarray          # w, x, y, z; IMU orientation in world
+    angular_velocity: np.ndarray     # rad/s, in the IMU frame
+    linear_acceleration: np.ndarray  # m/s^2, in the IMU frame, includes gravity
 
 
 class RobotModel:
@@ -28,6 +41,13 @@ class RobotModel:
             [self.model.jnt_dofadr[joint_id] for joint_id in self.joint_ids],
             dtype=np.int32,
         )
+
+        # Sensor addresses are resolved once so the publish callbacks stay cheap.
+        self._sensor_addresses: dict[str, tuple[int, int]] = {}
+        for name in IMU_SENSORS:
+            address = self.sensor_address(name)
+            if address is not None:
+                self._sensor_addresses[name] = address
 
     @property
     def num_actuators(self) -> int:
@@ -103,3 +123,30 @@ class RobotModel:
         position = np.array(self.data.xpos[body_id], dtype=float, copy=True)
         rotation = np.array(self.data.xmat[body_id], dtype=float, copy=True).reshape(3, 3)
         return position, rotation
+
+    # -- IMU sensors --------------------------------------------------------
+    @property
+    def imu_available(self) -> bool:
+        """Whether the model provides the full set of IMU sensors."""
+        return all(name in self._sensor_addresses for name in IMU_SENSORS)
+
+    def sensor_address(self, name: str) -> tuple[int, int] | None:
+        """Return the ``(sensordata offset, dimension)`` of a named sensor."""
+        sensor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SENSOR, name)
+        if sensor_id < 0:
+            return None
+        return int(self.model.sensor_adr[sensor_id]), int(self.model.sensor_dim[sensor_id])
+
+    def read_imu(self) -> ImuSample | None:
+        """Return the latest IMU sample, or ``None`` when the model lacks one."""
+        if not self.imu_available:
+            return None
+        return ImuSample(
+            orientation=self._sensor_values('imu_quat'),
+            angular_velocity=self._sensor_values('imu_gyro'),
+            linear_acceleration=self._sensor_values('imu_acc'),
+        )
+
+    def _sensor_values(self, name: str) -> np.ndarray:
+        start, dimension = self._sensor_addresses[name]
+        return np.array(self.data.sensordata[start:start + dimension], dtype=float, copy=True)

@@ -9,7 +9,7 @@ import time
 
 import rclpy
 
-from .config import SimConfig
+from .config import DEPTH_CAMERA_NAME, SimConfig
 from .depth import DepthWindow, DepthWindowError
 from .model import RobotModel
 from .node import A1MujocoSimNode
@@ -142,10 +142,10 @@ class SimulatorApp:
         node.get_logger().info(
             f'Loaded {config.model_path} ({robot.model.nq} qpos, '
             f'{robot.num_actuators} actuators, timestep={config.timestep:.6f}s)')
-        fovy = robot.camera_fovy(config.depth_camera)
+        fovy = robot.camera_fovy(DEPTH_CAMERA_NAME)
         if fovy > 0.0:
             node.get_logger().info(
-                f'Depth camera {config.depth_camera!r}: vertical FOV {fovy:.4f} deg')
+                f'Depth camera {DEPTH_CAMERA_NAME!r}: vertical FOV {fovy:.4f} deg')
         if not self._show_viewer:
             node.get_logger().info('Viewer: disabled (--headless)')
         elif self._follow_camera:
@@ -158,6 +158,15 @@ class SimulatorApp:
         else:
             node.get_logger().info(
                 'Depth window: closed (pass --depth to show the depth image)')
+        if robot.imu_available:
+            node.get_logger().info(
+                f'IMU: publishing {config.imu_topic!r} at '
+                f'{config.imu_publish_frequency:.0f} Hz')
+        else:
+            node.get_logger().warning(
+                'IMU: model has no imu_quat/imu_gyro/imu_acc sensors')
+            node.get_logger().warning(
+                f'IMU: {config.imu_topic} will not be published')
 
     def _shutdown(self, node, executor: threading.Thread | None) -> None:
         self._stop.set()

@@ -74,6 +74,8 @@ Depth window: open, bottom right corner and kept on top
 
 仿真频率由 `config/sim.yaml` 中的 `sim_frequency` 控制，当前为 500 Hz。该值会覆盖 XML 的 `model.opt.timestep`，因此仿真步长为 `1 / sim_frequency`。
 
+`sim.yaml` 只列出真正需要按环境调整的参数。深度窗口开关（`publish_depth`）、IMU 开关与坐标系（`publish_imu`、`imu_frame_id`）、复位关键帧（`reset_keyframe`）、深度相机名（`depth_camera`）等保持代码默认值（见 `a1_mujoco_sim/config.py`）；需要覆盖时，在 `sim.yaml` 中显式添加同名键即可。
+
 ## 退出行为
 
 以下三种方式等价，都会走同一条优雅退出流程（停止物理循环、关闭窗口和渲染器、关闭 ROS、结束执行器线程）：
@@ -100,7 +102,7 @@ src/sim/a1_mujoco_sim/
   scripts/
     a1_mujoco_sim.py  启动器，兼容源码和安装两种运行方式
   config/
-    sim.yaml    固定配置，脚本自动查找
+    sim.yaml    可调参数，其余保持代码默认值
 ```
 
 ## 相机参数
@@ -128,9 +130,22 @@ MuJoCo 的 `fovy` 是垂直视场角，因此垂直视场范围为 **56.4849°**
 默认接口如下：
 
 - 订阅 `/a1/command`：`a1_sim_msgs/msg/RobotCmd`
-- 发布 `/a1/state`：`a1_sim_msgs/msg/RobotData`
+- 发布 `/a1/state`：`a1_sim_msgs/msg/RobotData`（12 个关节的位置/速度/力矩）
+- 发布 `/a1/imu`：`sensor_msgs/msg/Imu`（默认 200 Hz）
 - 发布 `/a1/depth`：`a1_sim_msgs/msg/DepthImage`
 - 服务 `/a1/reset`：`a1_sim_msgs/srv/Reset`
+
+### IMU 话题
+
+`/a1/imu` 使用 ROS 2 标准的 `sensor_msgs/Imu`，数据来自 XML 中 trunk 上的 `imu` site：
+
+| 字段 | 对应 MuJoCo 传感器 | 说明 |
+|---|---|---|
+| `orientation` (w,x,y,z) | `imu_quat` | IMU 在世界系下的姿态 |
+| `angular_velocity` | `imu_gyro` | 角速度，IMU 坐标系，rad/s |
+| `linear_acceleration` | `imu_acc` | 线加速度，IMU 坐标系，m/s²，**包含重力** |
+
+模型传感器无噪声，因此三个 covariance 字段保持为 0。发布频率由 `sim.yaml` 的 `imu_publish_frequency` 控制；坐标系 `imu` 与发布开关属于代码默认值，需要覆盖时在 `sim.yaml` 中显式添加 `imu_frame_id` 或 `publish_imu`。
 
 命令中的 `torque` 始终生效；`kp` 或 `kd` 非零时，额外使用位置/速度 PD 项。
 `command_timeout` 为控制看门狗：超过该时间没有收到新命令就会将力矩清零；设为 0 或负数则关闭看门狗。

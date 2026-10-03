@@ -6,7 +6,11 @@ import pathlib
 
 import yaml
 
-PACKAGE_NAME = 'a1_mujoco_sim'
+# These names are part of the A1 model/ROS contract, rather than runtime
+# configuration. Keep them here so callers do not duplicate string literals.
+DEPTH_CAMERA_NAME = 'depth_camera'
+IMU_FRAME_ID = 'imu'
+RESET_KEYFRAME = 'home'
 
 
 @dataclasses.dataclass(frozen=True)
@@ -14,19 +18,21 @@ class SimConfig:
     """Validated simulator configuration loaded from ``sim.yaml``."""
 
     model_path: pathlib.Path
+    #Frequency
     sim_frequency: float = 500.0
     state_publish_frequency: float = 100.0
     depth_publish_frequency: float = 20.0
-    depth_width: int = 106
-    depth_height: int = 60
-    publish_depth: bool = True
-    depth_camera: str = 'depth_camera'
-    reset_keyframe: str = 'home'
-    command_timeout: float = 0.25
+    imu_publish_frequency: float = 200.0
+    #topic names
     command_topic: str = '/a1/command'
     state_topic: str = '/a1/state'
     depth_topic: str = '/a1/depth'
+    imu_topic: str = '/a1/imu'
     reset_service: str = '/a1/reset'
+    #depth camera
+    depth_width: int = 106
+    depth_height: int = 60
+    command_timeout: float = 0.25
 
     @property
     def timestep(self) -> float:
@@ -35,18 +41,18 @@ class SimConfig:
 
 
 def default_config_path() -> pathlib.Path:
-    """Locate ``sim.yaml`` in a source checkout or an installed workspace."""
+    """Locate the YAML for both a source checkout and an installed package."""
     package_dir = pathlib.Path(__file__).resolve().parent
     candidates = (
         package_dir.parent / 'config' / 'sim.yaml',
-        package_dir.parents[1] / 'share' / PACKAGE_NAME / 'config' / 'sim.yaml',
-        package_dir.parents[2] / 'share' / PACKAGE_NAME / 'config' / 'sim.yaml',
+        package_dir.parents[2] / 'share' / 'a1_mujoco_sim' / 'config' / 'sim.yaml',
+        package_dir.parents[3] / 'share' / 'a1_mujoco_sim' / 'config' / 'sim.yaml',
     )
     for candidate in candidates:
         if candidate.is_file():
             return candidate
     searched = '\n  '.join(str(candidate) for candidate in candidates)
-    raise FileNotFoundError(f'Cannot find sim.yaml. Searched:\n  {searched}')
+    raise FileNotFoundError(f'Cannot find simulator configuration. Searched:\n  {searched}')
 
 
 def resolve_model_path(config_path: pathlib.Path, value: str) -> pathlib.Path:
@@ -80,14 +86,13 @@ def load_config(path: pathlib.Path | None = None) -> SimConfig:
         depth_publish_frequency=float(section.get('depth_publish_frequency', 20.0)),
         depth_width=int(section.get('depth_width', 106)),
         depth_height=int(section.get('depth_height', 60)),
-        publish_depth=bool(section.get('publish_depth', True)),
-        depth_camera=str(section.get('depth_camera', 'depth_camera')),
-        reset_keyframe=str(section.get('reset_keyframe', 'home')),
         command_timeout=float(section.get('command_timeout', 0.25)),
         command_topic=str(section.get('command_topic', '/a1/command')),
         state_topic=str(section.get('state_topic', '/a1/state')),
         depth_topic=str(section.get('depth_topic', '/a1/depth')),
         reset_service=str(section.get('reset_service', '/a1/reset')),
+        imu_topic=str(section.get('imu_topic', '/a1/imu')),
+        imu_publish_frequency=float(section.get('imu_publish_frequency', 200.0)),
     )
     _validate(config, config_path)
     return config
@@ -101,6 +106,8 @@ def _validate(config: SimConfig, config_path: pathlib.Path) -> None:
         raise ValueError('state_publish_frequency must be greater than zero')
     if config.depth_publish_frequency <= 0.0:
         raise ValueError('depth_publish_frequency must be greater than zero')
+    if config.imu_publish_frequency <= 0.0:
+        raise ValueError('imu_publish_frequency must be greater than zero')
     if config.depth_width <= 0 or config.depth_height <= 0:
         raise ValueError('depth_width and depth_height must be greater than zero')
     if not config.model_path.is_file():
