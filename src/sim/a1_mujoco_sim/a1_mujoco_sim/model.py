@@ -34,6 +34,7 @@ class RobotModel:
         self.model = mujoco.MjModel.from_xml_path(str(model_path))
         self.model.opt.timestep = timestep
         self.data = mujoco.MjData(self.model)
+        mujoco.mj_forward(self.model, self.data)
 
         # Actuators are the authoritative joint order used by the ROS topics.
         self.joint_ids = np.asarray(self.model.actuator_trnid[:, 0], dtype=np.int32)
@@ -48,6 +49,27 @@ class RobotModel:
             address = self.sensor_address(name)
             if address is not None:
                 self._sensor_addresses[name] = address
+
+        # Joint state sensors follow the actuator names in the XML. Resolve
+        # their addresses once so published state comes from sensordata rather
+        # than directly from MuJoCo's generalized state arrays.
+        self._joint_sensor_addresses: list[tuple[tuple[int, int], tuple[int, int], tuple[int, int]]] = []
+        missing_joint_sensors: list[str] = []
+        for actuator_name in self.actuator_names:
+            position = self.sensor_address(f'{actuator_name}_pos')
+            velocity = self.sensor_address(f'{actuator_name}_vel')
+            torque = self.sensor_address(f'{actuator_name}_torque')
+            if position is None:
+                missing_joint_sensors.append(f'{actuator_name}_pos')
+            if velocity is None:
+                missing_joint_sensors.append(f'{actuator_name}_vel')
+            if torque is None:
+                missing_joint_sensors.append(f'{actuator_name}_torque')
+            if position is not None and velocity is not None and torque is not None:
+                self._joint_sensor_addresses.append((position, velocity, torque))
+        if missing_joint_sensors:
+            raise ValueError(
+                'MuJoCo model is missing joint sensors: ' + ', '.join(missing_joint_sensors))
 
     @property
     def num_actuators(self) -> int:
@@ -80,27 +102,24 @@ class RobotModel:
         self.zero_control()
         for index in range(min(len(commands), self.num_actuators)):
             command = commands[index]
-            joint_id = int(self.joint_ids[index])
-            dof_id = int(self.dof_ids[index])
 
             torque = float(command.torque)
             if command.kp:
-                position = float(self.data.qpos[self.model.jnt_qposadr[joint_id]])
+                position = self._sensor_scalar(self._joint_sensor_addresses[index][0])
                 torque += float(command.kp) * (float(command.position) - position)
             if command.kd:
-                velocity = float(self.data.qvel[dof_id])
+                velocity = self._sensor_scalar(self._joint_sensor_addresses[index][1])
                 torque += float(command.kd) * (float(command.velocity) - velocity)
 
             self.data.ctrl[index] = torque
 
     def read_joint_states(self) -> Iterable[tuple[float, float, float]]:
-        """Yield ``(position, velocity, torque)`` for every actuator joint."""
-        for index, joint_id in enumerate(self.joint_ids):
-            dof_id = int(self.dof_ids[index])
+        """Yield ``(position, velocity, torque)`` from joint sensors."""
+        for position, velocity, torque in self._joint_sensor_addresses:
             yield (
-                float(self.data.qpos[self.model.jnt_qposadr[joint_id]]),
-                float(self.data.qvel[dof_id]),
-                float(self.data.qfrc_actuator[dof_id]),
+                float(self._sensor_scalar(position)),
+                float(self._sensor_scalar(velocity)),
+                float(self._sensor_scalar(torque)),
             )
 
     def reset_to_keyframe(self, keyframe: str) -> None:
@@ -111,6 +130,7 @@ class RobotModel:
         else:
             mujoco.mj_resetData(self.model, self.data)
         self.zero_control()
+        mujoco.mj_forward(self.model, self.data)
 
     def step(self) -> None:
         mujoco.mj_step(self.model, self.data)
@@ -150,3 +170,9 @@ class RobotModel:
     def _sensor_values(self, name: str) -> np.ndarray:
         start, dimension = self._sensor_addresses[name]
         return np.array(self.data.sensordata[start:start + dimension], dtype=float, copy=True)
+
+    def _sensor_scalar(self, address: tuple[int, int]) -> float:
+        start, dimension = address
+        if dimension != 1:
+            raise ValueError(f'Expected scalar joint sensor, got dimension {dimension}')
+        return float(self.data.sensordata[start])

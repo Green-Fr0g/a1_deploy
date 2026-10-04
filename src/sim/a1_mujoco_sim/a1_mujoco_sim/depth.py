@@ -15,10 +15,14 @@ class DepthWindow:
     running because rendering and publishing happen in the simulation loop.
     """
 
-    def __init__(self, width: int, height: int, *, scale: int = 4,
-                 max_range_m: float = 5.0, margin: int = 60,
-                 always_on_top: bool = True,
-                 title: str = 'A1 depth camera') -> None:
+    def __init__(self,
+                width: int,
+                height: int, *,
+                scale: int = 4,
+                max_range_m: float = 2.0,
+                margin: int = 60,
+                always_on_top: bool = True,
+                title: str = 'A1 depth camera') -> None:
         if width <= 0 or height <= 0:
             raise ValueError('depth window size must be positive')
         if max_range_m <= 0.0:

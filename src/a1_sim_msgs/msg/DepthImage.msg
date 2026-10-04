@@ -1,5 +1,5 @@
-# Standard ROS image metadata; depth payload uses encoding 32FC1.
-std_msgs/Header header
+# Depth payload uses encoding 32FC1 and metres as the unit.
+builtin_interfaces/Time stamp
 uint32 height
 uint32 width
 string encoding

@@ -9,7 +9,6 @@ import yaml
 # These names are part of the A1 model/ROS contract, rather than runtime
 # configuration. Keep them here so callers do not duplicate string literals.
 DEPTH_CAMERA_NAME = 'depth_camera'
-IMU_FRAME_ID = 'imu'
 RESET_KEYFRAME = 'home'
 
 
@@ -41,18 +40,15 @@ class SimConfig:
 
 
 def default_config_path() -> pathlib.Path:
-    """Locate the YAML for both a source checkout and an installed package."""
-    package_dir = pathlib.Path(__file__).resolve().parent
-    candidates = (
-        package_dir.parent / 'config' / 'sim.yaml',
-        package_dir.parents[2] / 'share' / 'a1_mujoco_sim' / 'config' / 'sim.yaml',
-        package_dir.parents[3] / 'share' / 'a1_mujoco_sim' / 'config' / 'sim.yaml',
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    searched = '\n  '.join(str(candidate) for candidate in candidates)
-    raise FileNotFoundError(f'Cannot find simulator configuration. Searched:\n  {searched}')
+    """Return the YAML in the source package next to the Python package.
+
+    With ``--symlink-install``, this points directly to the working-tree
+    configuration, so edits to ``config/sim.yaml`` are used on the next run.
+    """
+    config_path = pathlib.Path(__file__).resolve().parent.parent / 'config' / 'sim.yaml'
+    if not config_path.is_file():
+        raise FileNotFoundError(f'Cannot find simulator configuration: {config_path}')
+    return config_path
 
 
 def resolve_model_path(config_path: pathlib.Path, value: str) -> pathlib.Path:
@@ -72,7 +68,7 @@ def load_config(path: pathlib.Path | None = None) -> SimConfig:
     config_path = (path or default_config_path()).expanduser().resolve()
     with config_path.open(encoding='utf-8') as stream:
         document = yaml.safe_load(stream) or {}
-    section = document.get('a1_mujoco_sim_node', document.get('a1_mujoco_sim', document))
+    section = document
     if not isinstance(section, dict):
         raise ValueError(f'Invalid configuration in {config_path}')
 

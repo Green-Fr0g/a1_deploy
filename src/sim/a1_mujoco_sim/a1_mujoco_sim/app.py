@@ -50,6 +50,7 @@ class SimulatorApp:
         try:
             robot = RobotModel(self._config.model_path, self._config.timestep)
             node = A1MujocoSimNode(self._config, robot)
+            node.initialize_depth_renderer()
             self._log_startup(node, robot)
             if self._show_depth:
                 self._depth_window = DepthWindow(
