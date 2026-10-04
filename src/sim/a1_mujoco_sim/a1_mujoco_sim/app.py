@@ -30,7 +30,7 @@ class SimulatorApp:
 
     def __init__(self, config: SimConfig, *, show_viewer: bool = True,
                  follow_camera: bool = False, show_depth: bool = False,
-                 depth_scale: int = 4) -> None:
+                 depth_scale: int = 1) -> None:
         self._config = config
         self._show_viewer = show_viewer
         self._follow_camera = follow_camera

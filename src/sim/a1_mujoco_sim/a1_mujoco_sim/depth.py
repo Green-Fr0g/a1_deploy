@@ -18,7 +18,7 @@ class DepthWindow:
     def __init__(self,
                 width: int,
                 height: int, *,
-                scale: int = 4,
+                scale: int = 1,
                 max_range_m: float = 2.0,
                 margin: int = 60,
                 always_on_top: bool = True,
@@ -114,7 +114,8 @@ class DepthWindow:
 
         image = Image.fromarray(self.depth_to_pixels(depth))
         size = (self._width * self._scale, self._height * self._scale)
-        return image.resize(size, Image.Resampling.NEAREST)
+        resampling = getattr(Image, 'Resampling', Image)
+        return image.resize(size, resampling.NEAREST)
 
     def depth_to_pixels(self, depth: np.ndarray) -> np.ndarray:
         """Map metres to 8-bit grey levels, where near objects are brighter."""

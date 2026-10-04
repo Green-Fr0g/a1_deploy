@@ -7,8 +7,8 @@
     <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
     <rgba haze="0.15 0.25 0.35 1"/>
     <!-- Match the depth input produced by extreme-parkour. Consumers can
-         resize this 106x60 buffer to the policy's 87x58 input. -->
-    <global azimuth="-130" elevation="-20" offwidth="106" offheight="60"/>
+         resize this 64x60 buffer to the policy's 87x58 input. -->
+    <global azimuth="-130" elevation="-20" offwidth="640" offheight="480"/>
   </visual>
 
   <asset>
