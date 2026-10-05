@@ -71,7 +71,7 @@ run_ros_build() {
     # Execute build
     if [ ${#packages[@]} -eq 0 ]; then
         print_info "Building all packages..."
-        colcon build --merge-install --symlink-install
+        colcon build --merge-install --symlink-install --base-paths src
     else
         print_info "Building specific packages: $package_list"
         colcon build --merge-install --symlink-install --packages-select $package_list

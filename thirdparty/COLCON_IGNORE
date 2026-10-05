@@ -1,3 +1,0 @@
-# Tells colcon to skip this whole subtree during package discovery.
-# Everything under thirdparty/ is downloaded or vendored (see .gitignore),
-# so it must never be built as a colcon package.

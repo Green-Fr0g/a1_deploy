@@ -64,3 +64,7 @@ core.*
 .DS_Store
 # Uncomment to keep local VS Code settings out of the repository.
 # .vscode/
+
+.agents
+.aws
+.codex

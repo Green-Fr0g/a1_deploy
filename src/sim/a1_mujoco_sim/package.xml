@@ -8,6 +8,8 @@
   <buildtool_depend>ament_python</buildtool_depend>
   <buildtool_depend>python3-setuptools</buildtool_depend>
   <depend>rclpy</depend>
+  <depend>ament_index_python</depend>
+  <depend>std_srvs</depend>
   <depend>a1_sim_msgs</depend>
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>python3-pil</exec_depend>

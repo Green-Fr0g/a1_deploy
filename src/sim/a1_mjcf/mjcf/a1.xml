@@ -79,7 +79,8 @@
             <body name="FR_foot" pos="0 0 -0.2">
               <inertial pos="0 0 0" quat="1 0 0 0" mass="0.06"
                 diaginertia="9.6e-06 9.6e-06 9.6e-06" />
-              <geom size="0.02" type="sphere" class="collision" />
+              <geom name="FR_foot" size="0.02" type="sphere" class="collision"
+                    friction="1.0" condim="3" />
             </body>
           </body>
         </body>
@@ -107,7 +108,8 @@
             <body name="FL_foot" pos="0 0 -0.2">
               <inertial pos="0 0 0" quat="1 0 0 0" mass="0.06"
                 diaginertia="9.6e-06 9.6e-06 9.6e-06" />
-              <geom size="0.02" type="sphere" class="collision" />
+              <geom name="FL_foot" size="0.02" type="sphere" class="collision"
+                    friction="1.0" condim="3" />
             </body>
           </body>
         </body>
@@ -135,7 +137,8 @@
             <body name="RR_foot" pos="0 0 -0.2">
               <inertial pos="0 0 0" quat="1 0 0 0" mass="0.06"
                 diaginertia="9.6e-06 9.6e-06 9.6e-06" />
-              <geom size="0.02" type="sphere" class="collision" />
+              <geom name="RR_foot" size="0.02" type="sphere" class="collision"
+                    friction="1.0" condim="3" />
             </body>
           </body>
         </body>
@@ -163,7 +166,8 @@
             <body name="RL_foot" pos="0 0 -0.2">
               <inertial pos="0 0 0" quat="1 0 0 0" mass="0.06"
                 diaginertia="9.6e-06 9.6e-06 9.6e-06" />
-              <geom size="0.02" type="sphere" class="collision" />
+              <geom name="RL_foot" size="0.02" type="sphere" class="collision"
+                    friction="1.0" condim="3" />
             </body>
           </body>
         </body>

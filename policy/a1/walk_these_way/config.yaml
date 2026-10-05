@@ -1,0 +1,92 @@
+a1/walk_these_way:
+  # Walk These Ways (a1)：双模型管线 adaptation + body（见 models）。
+  #
+  # 【拼接输入布局】(obs_history 在前、latent 在后)
+  #   model_input(2102) = concat( obs_history(2100), latent(2) )
+  #   ├─ obs_history(2100) = 30 帧 × 单帧(70)，按 observations_history 展平为帧优先(time-major)，最旧 -> 最新
+  #   │    └─ 单帧 obs(70) = gravity_vec(3) + walk_these_ways/commands(15) + dof_pos(12)
+  #   │                     + dof_vel(12) + actions(12) + last_actions(12) + clock_inputs(4)
+  #   │         └─ commands(15) = [vx, vy, wyaw, body_height, gait_freq,
+  #   │                            gait_phase, gait_offset, gait_bound, gait_duration,
+  #   │                            footswing_height, body_pitch, body_roll,
+  #   │                            stance_width, stance_length, aux_reward]
+  #   │                            （各项乘 commands_scale）
+  #   └─ latent(2) = adaptation_module(obs_history) 输出（num_privileged_obs=2）
+  #
+  # 注意：拼接顺序为 [obs_history, latent]（与 DreamWaQ 的 [code(vel,latent), obs] 相反）；
+  #       15 维 commands 与 clock_inputs 由 policy/observation/command_profile.hpp 生成，
+  #       last_actions 取上一拍推理的原始动作。
+  decimation: 4
+  models:
+    - name: adaptation
+      file: adaptation_module_latest.jit
+      inputs: [obs]              # 30 帧历史 = 2100
+      output: latent             # 2
+    - name: body
+      file: body_latest.jit
+      # 模型 forward 只接受一个 tensor，用 concat 拼成 [history(2100), latent(2)] = 2102
+      inputs: ["concat(obs, latent)"]
+      output: action             # 12
+      action: true
+  observations: ["gravity_vec", "walk_these_ways/commands", "dof_pos", "dof_vel", "actions", "last_actions", "clock_inputs"]
+  observations_dims_list: [3, 15, 12, 12, 12, 12, 4]
+  # 最旧 -> 最新（30 帧），与训练 obs_history 的滚动拼接顺序一致
+  observations_history: [29, 28, 27, 26, 25, 24, 23, 22, 21, 20,
+                         19, 18, 17, 16, 15, 14, 13, 12, 11, 10,
+                         9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+  observations_history_priority: time
+  num_policy_observations: 2100
+
+  clip_obs: 100.0
+  clip_actions:
+    lower: [-10.0, -10.0, -10.0,
+            -10.0, -10.0, -10.0,
+            -10.0, -10.0, -10.0,
+            -10.0, -10.0, -10.0]
+    upper: [ 10.0, 10.0, 10.0,
+             10.0, 10.0, 10.0,
+             10.0, 10.0, 10.0,
+             10.0, 10.0, 10.0]
+  rl_kp: [20.0, 20.0, 20.0,
+          20.0, 20.0, 20.0,
+          20.0, 20.0, 20.0,
+          20.0, 20.0, 20.0]
+  rl_kd: [0.5, 0.5, 0.5,
+          0.5, 0.5, 0.5,
+          0.5, 0.5, 0.5,
+          0.5, 0.5, 0.5]
+  fixed_kp: [80.0, 80.0, 80.0,
+             80.0, 80.0, 80.0,
+             80.0, 80.0, 80.0,
+             80.0, 80.0, 80.0]
+  fixed_kd: [3.0, 3.0, 3.0,
+             3.0, 3.0, 3.0,
+             3.0, 3.0, 3.0,
+             3.0, 3.0, 3.0]
+  lin_vel_scale: 2.0
+  ang_vel_scale: 0.25
+  dof_pos_scale: 1.0
+  dof_vel_scale: 0.05
+  # commands = [vx, vy, wyaw, body_height, gait_freq, gait_phase x4, footswing_height,
+  #             body_pitch, body_roll, stance_width, stance_length]（15 维，取 obs_scales）
+  commands_scale: [1.0, 1.0, 0.25, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.15, 0.3, 0.3, 1.0, 1.0, 1.0]
+  # 策略关节顺序 FL,FR,RL,RR；髋关节 action_scale = 0.25 * hip_scale_reduction(0.5) = 0.125
+  action_scale: [0.125, 0.25, 0.25,
+                 0.125, 0.25, 0.25,
+                 0.125, 0.25, 0.25,
+                 0.125, 0.25, 0.25]
+  # 策略顺序 FL,FR,RL,RR 的默认姿态（scatter 到硬件序 FR,FL,RR,RL）
+  default_dof_pos: [ 0.1000, 0.8000, -1.5000,
+                    -0.1000, 0.8000, -1.5000,
+                     0.1000, 1.0000, -1.5000,
+                    -0.1000, 1.0000, -1.5000]
+  num_of_dofs: 12
+  joint_mapping: [3, 4, 5, 0, 1, 2, 9, 10, 11, 6, 7, 8]
+  joint_names: ["FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+                "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+                "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
+                "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint"]
+  torque_limits: [33.5, 33.5, 33.5,
+                  33.5, 33.5, 33.5,
+                  33.5, 33.5, 33.5,
+                  33.5, 33.5, 33.5]

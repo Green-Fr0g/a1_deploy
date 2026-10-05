@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>frog_deploy</name>
+  <version>0.1.0</version>
+  <description>Frog quadruped robot (Unitree A1) deployment runtime.</description>
+  <maintainer email="maintainer@example.com">frog</maintainer>
+  <license> Apache-2.0 </license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>a1_sim_msgs</depend>
+  <depend>yaml-cpp</depend>
+  <!-- unitree_legged_sdk 的预编译库依赖 lcm；缺失时仅真机后端不可用 -->
+  <depend>liblcm-dev</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

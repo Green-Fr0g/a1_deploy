@@ -13,8 +13,10 @@ imu_publish_frequency: 200.0
 depth_publish_frequency: 20.0
 
 # Depth camera --------------------------------------------------------------
-depth_width: 640
-depth_height: 480
+# 106x60 与 extreme-parkour 训练一致：preprocess_depth 命中训练分支
+# （裁 [:-2, 4:-4] -> 58x98 -> 缩到 58x87）。相机 fovy=56.4849 正是为该宽高比选定。
+depth_width: 106
+depth_height: 60
 
 # ROS interfaces ------------------------------------------------------------
 command_topic: /a1/command
@@ -22,6 +24,8 @@ state_topic: /a1/state
 imu_topic: /a1/imu
 depth_topic: /a1/depth
 reset_service: /a1/reset
+pause_service: /a1/pause
+resume_service: /a1/resume
 
 # Command watchdog ----------------------------------------------------------
 # Zero all joint torques when no command arrives within this many seconds.

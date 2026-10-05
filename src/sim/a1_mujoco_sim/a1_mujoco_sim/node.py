@@ -8,6 +8,7 @@ import mujoco
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from std_srvs.srv import Empty
 
 from a1_sim_msgs.msg import DepthImage, ImuData, JointData, RobotCmd, RobotData
 from a1_sim_msgs.srv import Reset
@@ -29,6 +30,7 @@ class A1MujocoSimNode(Node):
         self._robot = robot
         self.lock = threading.Lock()
         self._last_command_time = self.get_clock().now()
+        self._paused = False
         self._renderer = None
         self._depth_rendering_enabled = False
         self._depth_renderer_initialized = False
@@ -39,6 +41,8 @@ class A1MujocoSimNode(Node):
         self._depth_publisher = self.create_publisher(DepthImage, config.depth_topic, 10)
         self.create_subscription(RobotCmd, config.command_topic, self._on_command, 10)
         self.create_service(Reset, config.reset_service, self._on_reset)
+        self.create_service(Empty, config.pause_service, self._on_pause)
+        self.create_service(Empty, config.resume_service, self._on_resume)
         self._state_timer = self.create_timer(
             1.0 / config.state_publish_frequency, self._publish_state)
 
@@ -146,6 +150,28 @@ class A1MujocoSimNode(Node):
             self._last_command_time = self.get_clock().now()
         response.result = 0
         return response
+
+    # -- pause / resume -----------------------------------------------------
+    def _on_pause(self, request, response):
+        del request
+        self._paused = True
+        self.get_logger().info('Simulation paused')
+        return response
+
+    def _on_resume(self, request, response):
+        del request
+        self._paused = False
+        self._last_command_time = self.get_clock().now()
+        self.get_logger().info('Simulation resumed')
+        return response
+
+    def is_paused(self) -> bool:
+        """Whether the physics loop should hold still.
+
+        Intentionally lock-free: the loop calls this while already holding
+        ``lock``, and a plain bool read is atomic under the GIL.
+        """
+        return self._paused
 
     def _publish_imu(self) -> None:
         """Publish the trunk IMU and Euler angles in a custom message.

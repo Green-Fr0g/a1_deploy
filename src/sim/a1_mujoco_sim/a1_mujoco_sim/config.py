@@ -5,6 +5,7 @@ import dataclasses
 import pathlib
 
 import yaml
+from ament_index_python.packages import get_package_share_directory
 
 # These names are part of the A1 model/ROS contract, rather than runtime
 # configuration. Keep them here so callers do not duplicate string literals.
@@ -28,6 +29,8 @@ class SimConfig:
     depth_topic: str = '/a1/depth'
     imu_topic: str = '/a1/imu'
     reset_service: str = '/a1/reset'
+    pause_service: str = '/a1/pause'
+    resume_service: str = '/a1/resume'
     #depth camera
     depth_width: int = 106
     depth_height: int = 60
@@ -40,31 +43,49 @@ class SimConfig:
 
 
 def default_config_path() -> pathlib.Path:
-    """Return the YAML in the source package next to the Python package.
+    """Return the shipped ``config/sim.yaml``.
 
-    With ``--symlink-install``, this points directly to the working-tree
-    configuration, so edits to ``config/sim.yaml`` are used on the next run.
+    Checked in order:
+    1. next to the Python package (working tree, or ``--symlink-install``),
+    2. the package share directory (regular ``colcon build`` installs
+       ``data_files`` there).
     """
-    config_path = pathlib.Path(__file__).resolve().parent.parent / 'config' / 'sim.yaml'
-    if not config_path.is_file():
-        raise FileNotFoundError(f'Cannot find simulator configuration: {config_path}')
-    return config_path
+    candidates = [
+        pathlib.Path(__file__).resolve().parent.parent / 'config' / 'sim.yaml',
+        pathlib.Path(get_package_share_directory('a1_mujoco_sim')) / 'config' / 'sim.yaml',
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(
+        'Cannot find simulator configuration; looked in: '
+        + ', '.join(str(candidate) for candidate in candidates))
 
 
-def resolve_model_path(config_path: pathlib.Path, value: str) -> pathlib.Path:
-    """Resolve ``model_path`` relative to the config file, then to the cwd."""
+def resolve_model_path(config_path: pathlib.Path, value: str,
+                       search_dirs: tuple[pathlib.Path, ...] = ()) -> pathlib.Path:
+    """Resolve a scene path against several candidate directories.
+
+    Order: the extra ``search_dirs``, the config file's directory, then the
+    current working directory.
+    """
     model_path = pathlib.Path(str(value)).expanduser()
     if model_path.is_absolute():
         return model_path
-    for base in (config_path.parent, pathlib.Path.cwd()):
+    for base in (*search_dirs, config_path.parent, pathlib.Path.cwd()):
         candidate = (base / model_path).resolve()
         if candidate.is_file():
             return candidate
     return (config_path.parent / model_path).resolve()
 
 
-def load_config(path: pathlib.Path | None = None) -> SimConfig:
-    """Read, coerce and validate the simulator configuration."""
+def load_config(path: pathlib.Path | None = None,
+                model_path: str | None = None) -> SimConfig:
+    """Read, coerce and validate the simulator configuration.
+
+    ``model_path`` overrides the scene from the YAML; it is resolved the same
+    way (relative to the config file first, then the current directory).
+    """
     config_path = (path or default_config_path()).expanduser().resolve()
     with config_path.open(encoding='utf-8') as stream:
         document = yaml.safe_load(stream) or {}
@@ -72,11 +93,21 @@ def load_config(path: pathlib.Path | None = None) -> SimConfig:
     if not isinstance(section, dict):
         raise ValueError(f'Invalid configuration in {config_path}')
 
-    if 'model_path' not in section:
-        raise ValueError(f'Missing "model_path" in {config_path}')
+    configured = str(section.get('model_path') or '')
+    if model_path:
+        # 命令行覆盖：先按 cwd、再按已配置场景所在目录（都是 mjcf/）、
+        # 最后才回落到配置文件目录，这样 `--model obstacles.xml` 也能用。
+        search_dirs: tuple[pathlib.Path, ...] = (pathlib.Path.cwd(),)
+        if configured:
+            search_dirs += (resolve_model_path(config_path, configured).parent,)
+        scene = resolve_model_path(config_path, model_path, search_dirs)
+    else:
+        if not configured:
+            raise ValueError(f'Missing "model_path" in {config_path}')
+        scene = resolve_model_path(config_path, configured)
 
     config = SimConfig(
-        model_path=resolve_model_path(config_path, section['model_path']),
+        model_path=scene,
         sim_frequency=float(section.get('sim_frequency', 500.0)),
         state_publish_frequency=float(section.get('state_publish_frequency', 100.0)),
         depth_publish_frequency=float(section.get('depth_publish_frequency', 20.0)),
@@ -87,6 +118,8 @@ def load_config(path: pathlib.Path | None = None) -> SimConfig:
         state_topic=str(section.get('state_topic', '/a1/state')),
         depth_topic=str(section.get('depth_topic', '/a1/depth')),
         reset_service=str(section.get('reset_service', '/a1/reset')),
+        pause_service=str(section.get('pause_service', '/a1/pause')),
+        resume_service=str(section.get('resume_service', '/a1/resume')),
         imu_topic=str(section.get('imu_topic', '/a1/imu')),
         imu_publish_frequency=float(section.get('imu_publish_frequency', 200.0)),
     )

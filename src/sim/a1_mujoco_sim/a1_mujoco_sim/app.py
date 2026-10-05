@@ -50,6 +50,15 @@ class SimulatorApp:
         try:
             robot = RobotModel(self._config.model_path, self._config.timestep)
             node = A1MujocoSimNode(self._config, robot)
+            duplicates = _wait_for_sole_publisher(node, self._config.state_topic)
+            if duplicates:
+                node.get_logger().error(
+                    f'{duplicates} other publisher(s) already own '
+                    f'{self._config.state_topic!r}. Refusing to start: two '
+                    'simulators on the same topics interleave their states, so '
+                    'the controller sees two different robots and goes unstable. '
+                    'Stop the other instance first.')
+                return 1
             node.initialize_depth_renderer()
             self._log_startup(node, robot)
             if self._show_depth:
@@ -75,23 +84,33 @@ class SimulatorApp:
         config = self._config
         camera = FollowCamera() if self._follow_camera else None
         depth_period = 1.0 / config.depth_publish_frequency
+        viewer_period = 1.0 / 60.0
         next_step = time.perf_counter()
+        next_viewer_time = 0.0
 
         while not self._stop.is_set() and rclpy.ok():
             if viewer is not None and not viewer.is_running():
                 break  # the user closed the viewer window
+            # Every access to robot.data/model must be serialized: the ROS
+            # executor thread (commands/state/IMU) and the viewer render both
+            # touch the same mjData. Rendering or camera reads outside this
+            # lock race with mj_step and corrupt the heap
+            # ("mjData while stack is in use"). The viewer is synced at ~60 Hz
+            # so a full render does not hold the lock on every physics step.
             with node.lock:
-                if node.command_is_stale():
-                    robot.zero_control()
-                robot.step()
+                if not node.is_paused():
+                    if node.command_is_stale():
+                        robot.zero_control()
+                    robot.step()
                 sim_time = robot.data.time
-            if viewer is not None:
-                if camera is not None:
-                    camera.update(viewer, robot)
-                try:
-                    viewer.sync()
-                except Exception:
-                    break  # the viewer was closed while syncing
+                if viewer is not None and time.perf_counter() >= next_viewer_time:
+                    next_viewer_time = time.perf_counter() + viewer_period
+                    if camera is not None:
+                        camera.update(viewer, robot)
+                    try:
+                        viewer.sync()
+                    except Exception:
+                        break  # the viewer was closed while syncing
             if sim_time >= self._next_depth_time:
                 self._next_depth_time = sim_time + depth_period
                 self._publish_depth(node)
@@ -174,13 +193,15 @@ class SimulatorApp:
         if self._depth_window is not None:
             self._depth_window.close()
             self._depth_window = None
-        if node is not None:
-            node.close_renderer()
+        # Stop the executor before tearing down the renderer: a callback that
+        # runs concurrently with close_renderer() would touch freed GL state.
         if rclpy.ok():
             rclpy.shutdown()
         if executor is not None:
             executor.join(timeout=2.0)
         if node is not None:
+            with node.lock:
+                node.close_renderer()
             node.destroy_node()
 
 
@@ -190,6 +211,24 @@ def _spin_ros(node: A1MujocoSimNode) -> None:
         rclpy.spin(node)
     except rclpy.executors.ExternalShutdownException:
         pass
+
+
+def _wait_for_sole_publisher(node: A1MujocoSimNode, topic: str,
+                             timeout: float = 2.0) -> int:
+    """Return how many publishers besides ours share ``topic``.
+
+    Spins the node briefly so DDS discovery can populate the graph. A stale
+    ``a1_mujoco_sim`` from a previous session keeps publishing /a1/state and
+    /a1/command; the controller then reads two interleaved robots and loses
+    balance at random, which is very hard to diagnose from behaviour alone.
+    """
+    deadline = time.perf_counter() + timeout
+    while time.perf_counter() < deadline:
+        rclpy.spin_once(node, timeout_sec=0.1)
+        extra = node.count_publishers(topic) - 1
+        if extra > 0:
+            return extra
+    return 0
 
 
 @contextlib.contextmanager

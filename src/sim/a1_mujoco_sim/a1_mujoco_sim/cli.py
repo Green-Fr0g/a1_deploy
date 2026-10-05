@@ -21,6 +21,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--headless', action='store_true',
         help='do not open the MuJoCo viewer (servers without a display)')
+    parser.add_argument(
+        '-m', '--model', metavar='PATH',
+        help='scene (MJCF) to load, overriding model_path from sim.yaml; '
+             'a bare file name is resolved inside the mjcf/ directory, '
+             'for example “--model obstacles.xml”')
     return parser
 
 
@@ -31,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error('--camera cannot be combined with --headless')
 
     try:
-        config = load_config()
+        config = load_config(model_path=args.model)
     except (OSError, ValueError) as error:
         print(f'error: {error}', file=sys.stderr)
         return 2
